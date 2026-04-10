@@ -1,8 +1,8 @@
 # dynatrace-ai-workspace
 
-An AI-powered observability workspace for Dynatrace — combining GitHub Copilot, the Dynatrace MCP server, and the [dynatrace-for-ai](https://github.com/Dynatrace/dynatrace-for-ai) skills framework to accelerate incident triage, root cause analysis, and day-to-day observability workflows.
+An AI-powered observability workspace for Dynatrace — combining GitHub Copilot or Claude AI, the Dynatrace MCP server, and the [dynatrace-for-ai](https://github.com/Dynatrace/dynatrace-for-ai) skills framework to accelerate incident triage, root cause analysis, and day-to-day observability workflows.
 
-> **What this gives you:** Ask Copilot natural language questions about your Dynatrace environment and get accurate, production-aware answers — powered by verified domain knowledge, live API access, and pre-built investigation workflows.
+> **What this gives you:** Ask AI natural language questions about your Dynatrace environment and get accurate, production-aware answers — powered by verified domain knowledge, live API access, and pre-built investigation workflows.
 
 ---
 
@@ -34,13 +34,14 @@ dynatrace-ai-workspace/
     └── ai-observability-demo.md  # Demo script
 ````
 
-| Tool | Purpose |
-|---|---|
-| [VS Code](https://code.visualstudio.com/) | Editor with Copilot Chat |
-| [GitHub Copilot](https://github.com/features/copilot) | AI assistant (subscription required) |
-| [Node.js](https://nodejs.org/) v18+ | Required for skills installer and MCP server |
-| [dtctl](https://github.com/dynatrace-oss/dtctl) | Dynatrace CLI for notebook verification and resource management |
-| A Dynatrace environment | `https://<env>.apps.dynatrace.com` |
+| Tool | Purpose | For |
+|---|---|---|
+| [VS Code](https://code.visualstudio.com/) | Editor with Copilot/Claude Chat | Both |
+| [GitHub Copilot](https://github.com/features/copilot) | AI assistant | GitHub Copilot (subscription) |
+| [Claude Code](https://claude.ai/code) | AI assistant | Claude AI (Pro or Team) |
+| [Node.js](https://nodejs.org/) v18+ | Required for skills installer and MCP server | Both |
+| [dtctl](https://github.com/dynatrace-oss/dtctl) | Dynatrace open-source CLI for agents & humans to manage observability resources | Both |
+| A Dynatrace environment | `https://<env>.apps.dynatrace.com` or `https://<env>.sprint.apps.dynatracelabs.com` | Both |
 
 ---
 
@@ -50,6 +51,18 @@ dynatrace-ai-workspace/
 > Dynatrace demo environment (`guu84124.apps.dynatrace.com`). No changes are
 > required to run demos against the production demo tenant. Clone the repo,
 > reload VS Code, and authenticate via your Dynatrace SSO when prompted.
+
+### Choose Your Frontend
+
+This workspace works with:
+- **GitHub Copilot** in VS Code (requires subscription)
+- **Claude Code** via web or desktop (requires Claude Pro or Team)
+
+Select your setup path below. Both receive the same skills, prompts, and MCP server access.
+
+**GitHub Copilot Path** → Follow Steps 1–6 below. Copilot loads `.github/copilot-instructions.md` automatically.
+
+**Claude Code Path** → Follow Steps 1–5, then open `CLAUDE.md` in your Claude Code session. Claude loads `.claude/skills/` symlinks automatically.
 
 ### 1. Clone the workspace
 
@@ -116,7 +129,7 @@ Find the Environment table in both files and update the fallback server name and
 | **Fallback MCP server** | `<your-tenant-id>-mcp` → https://<your-tenant-id>.sprint.apps.dynatracelabs.com |
 ```
 
-Both files must be updated — `copilot-instructions.md` is loaded by GitHub Copilot and `CLAUDE.md` is loaded by Claude Code. Without updating both, the fallback server will reference the original author's sprint tenant.
+Both `.github/copilot-instructions.md` (GitHub Copilot) and `CLAUDE.md` (Claude Code) must be updated with your tenant ID or they will reference the original author's sprint environment.
 
 **Step C — Authenticate dtctl**
 
@@ -159,11 +172,13 @@ to VS Code. Subsequent sessions authenticate automatically.
 
 ### 6. Verify the connection
 
-In Copilot Chat, type:
+**GitHub Copilot users:** In Copilot Chat, type:
 
 ```
 Using the guu84124-mcp server, list the top 5 services by request volume in the last hour
 ```
+
+**Claude Code users:** In Claude Code, type the same query or copy it from the GitHub Copilot instruction above.
 
 If you see a table of services with request counts — you are live and ready to demo.
 
@@ -193,7 +208,10 @@ Skills are domain knowledge files that teach Copilot how Dynatrace works — cor
 
 ## Prompts
 
-Prompts are pre-built investigation workflows available as Copilot slash commands. Type `/` in Copilot Chat to see them.
+Prompts are pre-built investigation workflows available as slash commands.
+
+- **GitHub Copilot:** Type `/` in Copilot Chat (see `.github/prompts/`)
+- **Claude Code:** Type `/` in Claude chat or paste prompt content from `.github/prompts/`
 
 | Prompt | When to Use |
 |---|---|
