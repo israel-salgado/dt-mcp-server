@@ -47,7 +47,7 @@ dynatrace-ai-workspace/
 
 ## Setup
 
-> **Dynatrace employees:** This workspace is pre-configured for the standard
+> **Dynatrace employees & partners:** This workspace is pre-configured for the standard
 > Dynatrace demo environment (`guu84124.apps.dynatrace.com`). No changes are
 > required to run demos against the production demo tenant. Clone the repo,
 > reload VS Code, and authenticate via your Dynatrace SSO when prompted.
@@ -82,19 +82,49 @@ npx skills add dynatrace-oss/dtctl
 
 > Run this command any time Dynatrace releases new skills.
 
-### 3. Configure your sprint environment (optional)
+### 3. Configure dtctl for the shared demo tenant
+
+`dtctl` is used for terminal-level verification and resource management. It is
+required for demo workflows in this workspace.
+
+```bash
+# macOS / Linux — direct install (no package manager required)
+curl -fsSL https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.sh | bash
+
+# Local desktop (macOS/Windows/Linux with keyring): OAuth login
+dtctl auth login --context guu84124 \
+  --environment "https://guu84124.apps.dynatrace.com"
+
+# GitHub Codespaces / CI: token-based auth
+dtctl config set-context guu84124 \
+  --environment "https://guu84124.apps.dynatrace.com" \
+  --token-ref guu84124-token
+dtctl config set-credentials guu84124-token --token <YOUR_PLATFORM_TOKEN>
+
+# Verify
+dtctl doctor
+```
+
+Create your platform token in Dynatrace: Identity & Access Management → Access Tokens → Generate new token → Platform token.
+
+If you are in Codespaces and see `keyring probe failed` or `dbus-launch` errors, skip OAuth and use token-based auth.
+
+### 4. Configure your sprint environment (optional)
 
 The workspace is pre-configured with two MCP servers — the shared demo tenant
 (`guu84124`) and a personal sprint tenant. The sprint entry is specific to the
 original author and **must be updated** if you want to use your own sprint environment.
 
-Complete all four steps below to fully configure your sprint tenant. Skipping
+Complete all three steps below to fully configure your sprint tenant. Skipping
 any step will result in Copilot referencing a server that doesn't exist or
 authenticating against the wrong environment.
 
+> If you only need the shared demo tenant (`guu84124`), skip this section entirely —
+> no sprint configuration is required for demos.
+
 #### Sprint Tenant Checklist
 
-**Step A — Update `.vscode/mcp.json`**
+**Step 4.A — Update `.vscode/mcp.json`**
 
 Replace `<your-tenant-id>` with your personal sprint tenant ID (e.g. `abc12345`):
 
@@ -121,7 +151,7 @@ Replace `<your-tenant-id>` with your personal sprint tenant ID (e.g. `abc12345`)
 }
 ```
 
-**Step B — Update `.github/copilot-instructions.md` and `CLAUDE.md`**
+**Step 4.B — Update `.github/copilot-instructions.md` and `CLAUDE.md`**
 
 Find the Environment table in both files and update the fallback server name and URL to match your tenant ID:
 
@@ -131,36 +161,21 @@ Find the Environment table in both files and update the fallback server name and
 
 Both `.github/copilot-instructions.md` (GitHub Copilot) and `CLAUDE.md` (Claude Code) must be updated with your tenant ID or they will reference the original author's sprint environment.
 
-**Step C — Authenticate dtctl**
+**Step 4.C — Authenticate dtctl**
 
 ```bash
+# Local desktop (macOS/Windows/Linux with keyring): OAuth login
 dtctl auth login --context <your-tenant-id> \
   --environment "https://<your-tenant-id>.sprint.apps.dynatracelabs.com"
+
+# GitHub Codespaces / CI: token-based auth
+dtctl config set-context <your-tenant-id> \
+  --environment "https://<your-tenant-id>.sprint.apps.dynatracelabs.com" \
+  --token-ref <your-tenant-id>-token
+dtctl config set-credentials <your-tenant-id>-token --token <YOUR_PLATFORM_TOKEN>
 ```
 
-**Step D — Reload VS Code**
-
-Press `Cmd+Shift+P` → `Developer: Reload Window` to register the new MCP server.
-
-> If you only need the shared demo tenant (`guu84124`), skip this section entirely —
-> no sprint configuration is required for demos.
-
-### 4. Configure dtctl for the shared demo tenant (optional)
-
-`dtctl` is used for terminal-level verification and resource management. It is
-required for the `/daily-standup-notebook` prompt but optional for all other prompts.
-
-```bash
-# macOS — direct install (no Homebrew required)
-curl -fsSL https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.sh | bash
-
-# Authenticate against the shared demo tenant
-dtctl auth login --context guu84124 \
-  --environment "https://guu84124.apps.dynatrace.com"
-
-# Verify
-dtctl doctor
-```
+If OAuth fails with a keyring error (for example, `dbus-launch` not found), use the token-based method above.
 
 ### 5. Reload VS Code
 
@@ -257,12 +272,18 @@ The Dynatrace MCP server gives Copilot live API access to your environment. When
 [dtctl](https://github.com/dynatrace-oss/dtctl) is a kubectl-style CLI for Dynatrace that complements this workspace — giving you terminal-level access to run DQL queries, manage workflows, verify notebooks, and more.
 
 ```bash
-# macOS / Linux (direct install)
+# macOS / Linux — direct install (no package manager required)
 curl -fsSL https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.sh | bash
 
-# Authenticate against the shared demo tenant
+# Local desktop (macOS/Windows/Linux with keyring): OAuth login
 dtctl auth login --context guu84124 \
   --environment "https://guu84124.apps.dynatrace.com"
+
+# GitHub Codespaces / CI: token-based auth
+dtctl config set-context guu84124 \
+  --environment "https://guu84124.apps.dynatrace.com" \
+  --token-ref guu84124-token
+dtctl config set-credentials guu84124-token --token <YOUR_PLATFORM_TOKEN>
 
 # Verify
 dtctl doctor
