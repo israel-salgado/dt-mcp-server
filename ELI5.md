@@ -27,18 +27,7 @@ Then open the folder in VS Code: **File → Open Folder**.
 
 ---
 
-## Step 2 — Install the Skills
-
-Skills teach the AI how Dynatrace works — correct field names, query patterns, and investigation steps. Without them, the AI guesses and gets it wrong.
-
-```bash
-npx skills add dynatrace/dynatrace-for-ai
-npx skills add dynatrace-oss/dtctl
-```
-
----
-
-## Step 3 — Install dtctl
+## Step 2 — Install dtctl
 
 `dtctl` is a command-line tool that lets you verify what the AI creates — like checking that a notebook it built actually exists in Dynatrace.
 
@@ -55,6 +44,17 @@ dtctl doctor
 ```
 
 When `dtctl doctor` shows green, you are connected.
+
+---
+
+## Step 3 — Install the Skills
+
+Skills teach the AI how Dynatrace works — correct field names, query patterns, and investigation steps. Without them, the AI guesses and gets it wrong.
+
+```bash
+npx skills add dynatrace/dynatrace-for-ai
+npx skills add dynatrace-oss/dtctl
+```
 
 ---
 
