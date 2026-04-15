@@ -1,2 +1,12 @@
+# VS Code / OS
+.vscode/
 .DS_Store
+
+# Secrets
+.env
+
+# Dependencies
+node_modules/
+
+# Logs
 *.log
