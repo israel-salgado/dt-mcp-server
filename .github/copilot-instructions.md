@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **Default MCP server** | `demo.live` → https://guu84124.apps.dynatrace.com |
-| **Fallback MCP server** | `tdg63684-mcp` → https://tdg63684.sprint.apps.dynatracelabs.com |
+| **Fallback MCP server** | `YOURTENANTID-mcp` → https://YOURTENANTID.apps.dynatraces.com |
 
 To target a specific environment for a session:
 ```
