@@ -188,15 +188,18 @@ fetch spans | filter trace_id == "[TRACE-ID]" | sort start_time asc
 | Kubernetes/pod issues | `dt-obs-kubernetes` |
 | Infrastructure/host issues | `dt-obs-hosts` |
 | AWS infrastructure | `dt-obs-aws` |
-| Terminal/CLI workflows | `dtctl` |
+| Terminal/CLI workflows (visible commands) | `dtctl` |
+| Choosing between MCP and dtctl | `CONVENTIONS.md` → *Tool Selection* |
 
 ---
 
 ## 🔗 Session Management
 
-**Baseline tenant:** `guu84124` (public, `demo.live.dynatrace.com`) — the only tenant ID in repo source. The agent does **not** auto-connect. At session start it runs `dtctl config current-context` and reports the active context (which dtctl persists on disk across sessions). For a fresh clone, connect to the baseline first (or any tenant you have access to).
+**Baseline tenant:** `guu84124` (public, `demo.live.dynatrace.com`) — the only tenant ID in repo source. The agent does **not** auto-connect. At session start it reports the active tenant context using whichever path is configured: `dtctl config current-context` (dtctl persists on disk across sessions) and/or the configured MCP server(s) from `.vscode/mcp.json` / `.mcp.json`. For a fresh clone, connect to the baseline first (or any tenant you have access to).
 
-**Connect to a new dtctl tenant** (full procedure: `CONVENTIONS.md` → *Connecting to a New Tenant*):
+**Connect to a new tenant** — two independent paths (full procedure: `CONVENTIONS.md` → *Connecting to a New Tenant*):
+
+*Path A — via dtctl:*
 ```
 dtctl config get-contexts                                # check if it already exists
 dtctl auth login --environment https://<TENANTID>.apps.dynatrace.com \
@@ -205,12 +208,15 @@ dtctl config current-context; dtctl auth whoami --plain         # verify
 ```
 URL classes: `apps` (prod), `sprint.apps` (sprint/lab — Dynatrace internal only), `live` (classic Gen2).
 
-**Switch context** (preferred → use a nickname; fallback → use the raw tenant ID):
+*Path B — via MCP server entry:* add a parallel `"<nickname>": { … "DT_ENVIRONMENT": "https://<TENANTID>.apps.dynatrace.com" … }` block to **both** `.vscode/mcp.json` (under `"servers"`) and `.mcp.json` (under `"mcpServers"`), reload MCP servers (VS Code: *MCP: Reload Servers*), then verify with `get_environment_info`.
+
+**Switch context** (preferred → nickname; fallback → raw tenant ID). The same nickname resolves both paths — single identity, two routes:
 ```
-"switch to <NICKNAME>"        # agent resolves via temp_dtctl_files/tenant-memory/tenants.json
-"switch to <TENANTID>"        # raw 8-char ID always works
+"switch to <NICKNAME>"             # dtctl: dtctl config use-context <id>
+"use the <NICKNAME> server, …"      # MCP: select that server entry in chat
+"switch to <TENANTID>"             # raw 8-char ID always works for dtctl
 ```
-Either way the agent echoes a one-line confirmation (`Switching context → <NICKNAME> · <TENANTID> · <class> · <safety>`) before running `dtctl config use-context`. Ambiguous or fuzzy names are never auto-resolved.
+For dtctl switches the agent echoes a one-line confirmation (`Switching context → <NICKNAME> · <TENANTID> · <class> · <safety>`) before running `dtctl config use-context`. For MCP server selection in chat the agent echoes `Using MCP server → <NICKNAME> · <TENANTID>` once before the first call. Ambiguous or fuzzy names are never auto-resolved on either path.
 Full rules and schema: `CONVENTIONS.md` → *Local Tenant Nickname Registry*.
 
 **Workspace Conventions**: See governing briefing (`copilot-instructions.md` or `CLAUDE.md`) + `CONVENTIONS.md` (single source of truth for temp organization, Live State Reconciliation & Conflict Protection, review mandates, Sync Checklist, and redundancy reduction). 
@@ -249,4 +255,4 @@ If hitting 500GB limit:
 
 ---
 
-**Last Updated:** April 10, 2026 | **Default MCP:** demo.live | **Status:** Production
+**Last Updated:** April 30, 2026 | **Baseline:** demo.live (`guu84124`) | **Status:** Production
