@@ -194,10 +194,24 @@ fetch spans | filter trace_id == "[TRACE-ID]" | sort start_time asc
 
 ## 🔗 Session Management
 
-**Switch MCP Server:**
+**Baseline tenant:** `guu84124` (public, `demo.live.dynatrace.com`) — the only tenant ID in repo source. The agent does **not** auto-connect. At session start it runs `dtctl config current-context` and reports the active context (which dtctl persists on disk across sessions). For a fresh clone, connect to the baseline first (or any tenant you have access to).
+
+**Connect to a new dtctl tenant** (full procedure: `CONVENTIONS.md` → *Connecting to a New Tenant*):
 ```
-"For all queries, use the tdg63684-mcp server"
+dtctl config get-contexts                                # check if it already exists
+dtctl auth login --environment https://<TENANTID>.apps.dynatrace.com \
+                 --context <TENANTID> --safety-level readwrite-mine   # OAuth via browser
+dtctl config current-context; dtctl auth whoami --plain         # verify
 ```
+URL classes: `apps` (prod), `sprint.apps` (sprint/lab — Dynatrace internal only), `live` (classic Gen2).
+
+**Switch context** (preferred → use a nickname; fallback → use the raw tenant ID):
+```
+"switch to <NICKNAME>"        # agent resolves via temp_dtctl_files/tenant-memory/tenants.json
+"switch to <TENANTID>"        # raw 8-char ID always works
+```
+Either way the agent echoes a one-line confirmation (`Switching context → <NICKNAME> · <TENANTID> · <class> · <safety>`) before running `dtctl config use-context`. Ambiguous or fuzzy names are never auto-resolved.
+Full rules and schema: `CONVENTIONS.md` → *Local Tenant Nickname Registry*.
 
 **Workspace Conventions**: See governing briefing (`copilot-instructions.md` or `CLAUDE.md`) + `CONVENTIONS.md` (single source of truth for temp organization, Live State Reconciliation & Conflict Protection, review mandates, Sync Checklist, and redundancy reduction). 
 - Always review `temp_dtctl_files/**` first (`list_dir` + `grep_search`).

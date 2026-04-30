@@ -17,7 +17,6 @@ dynatrace-ai-workspace/
 ├── CHEATSHEET.md                 # Quick reference — 7 copy-paste DQL queries and critical rules
 ├── ARCHITECTURE.md               # How the workspace is built and how components connect
 ├── CONVENTIONS.md                # Single source of truth for all agent rules (reconciliation, DQL, Sync Checklist)
-├── ELI5.md                       # Beginner-friendly 15-minute install guide
 ├── README.md                     # Setup guide and quick reference
 ├── CLAUDE.md                     # Auto-loaded session briefing for Claude Code
 ├── scripts/                      # Validation helpers (validate-tenant-write.ps1 runs before any dtctl tenant write)
@@ -85,12 +84,16 @@ This workspace assumes **VS Code + GitHub Copilot**. Install these extensions fr
 
 > **Claude Code users:** No extension installation needed — Claude Code runs in the web browser or desktop app.
 
-### 1. Clone the workspace
+### 1. Clone this workspace
+
+Clone my repo (`dt-mcp-server`):
 
 ```bash
-git clone https://github.com/israel-salgado/dynatrace-ai-workspace.git
-cd dynatrace-ai-workspace
+git clone https://github.com/israel-salgado/dt-mcp-server.git
+cd <your-chosen-path>/dt-mcp-server
 ```
+
+Replace `<your-chosen-path>` with wherever you cloned it (e.g. `C:\github\dt-mcp-server` on Windows or `~/code/dt-mcp-server` on macOS/Linux). The folder name stays `dt-mcp-server` unless you renamed it during clone.
 
 Then open the folder in VS Code via **File → Open Folder**.
 
@@ -103,62 +106,43 @@ npx skills add dynatrace-oss/dtctl
 
 > Run this command any time Dynatrace releases new skills.
 
-### 3. Install and configure dtctl
+### 3. Install `dtctl` (separate repo)
 
-`dtctl` is a command-line tool that lets you verify what the AI creates — like checking that a notebook it built actually exists in Dynatrace.
+`dtctl` is a sibling project, **not** part of this repo. It's a kubectl-style CLI for Dynatrace that the AI uses to run DQL queries, manage workflows, and verify the notebooks/dashboards it creates.
 
-**Install dtctl first:**
+Follow the install + authentication instructions in the official dtctl repo:
 
-```bash
-# macOS / Linux — direct install (no package manager required)
-curl -fsSL https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.sh | bash
+**→ [github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl)**
 
-# Windows — install via npm (requires Node.js v18+, recommended option)
-npm install -g @dynatrace-oss/dtctl
+> **Note:** I also maintain a fork at **[github.com/israel-salgado/dtctl](https://github.com/israel-salgado/dtctl)** that I'm gradually updating to be more beginner-friendly (clearer install steps, plain-English docs, Windows-first examples). Check there if the upstream README feels too dense — otherwise the official repo above is the canonical source.
 
-# Verify installation across all platforms
-dtctl --version
-```
+Once installed, return here and continue with Step 4. A working `dtctl --version` and an authenticated context (verified with `dtctl auth whoami --plain`) is the only thing this workspace needs from it.
 
-**Then authenticate to the demo tenant:**
+### 4. Configure additional tenants for MCP (optional)
 
-```bash
-# Local desktop (macOS/Windows/Linux with keyring): OAuth login
-dtctl auth login --context demo.live \
-  --environment "https://guu84124.apps.dynatrace.com"
+> **Skip this entire section unless you specifically want the AI to use
+> MCP-only capabilities (Davis CoPilot chat, Davis Analyzers, etc.) against
+> a tenant other than the public demo tenant.** For ordinary AI-driven work
+> against any tenant — querying, building dashboards, editing notebooks —
+> `dtctl` alone is enough. The AI can drive `dtctl` for you. See
+> [How MCP Works (and when it matters)](#how-mcp-works-and-when-it-matters)
+> in the Key Concepts section for the full breakdown.
 
-# GitHub Codespaces / CI: token-based auth
-dtctl config set-context demo.live \
-  --environment "https://guu84124.apps.dynatrace.com" \
-  --token-ref demo.live-token
-dtctl config set-credentials demo.live-token --token <YOUR_PLATFORM_TOKEN>
+The workspace is pre-configured with two MCP server entries: the shared
+demo tenant (`demo.live` → `guu84124`, public) and a `TENANTID-mcp`
+placeholder you can rename to your own tenant.
 
-# Verify
-dtctl doctor
-```
+Complete all four sub-steps below to add your tenant. Skipping any step
+will leave the AI referencing a server that doesn't exist or pointing at
+the wrong environment.
 
-Create your platform token in Dynatrace: Identity & Access Management → Access Tokens → Generate new token → Platform token.
-
-If you are in Codespaces and see `keyring probe failed` or `dbus-launch` errors, skip OAuth and use token-based auth.
-
-### 4. Configure your sprint environment (optional)
-
-The workspace is pre-configured with two MCP servers — the shared demo tenant
-(`guu84124`) and a personal sprint tenant. The sprint entry is specific to the
-original author and **must be updated** if you want to use your own sprint environment.
-
-Complete all four steps below to fully configure your sprint tenant. Skipping
-any step will result in Copilot referencing a server that doesn't exist or
-authenticating against the wrong environment.
-
-> If you only need the shared demo tenant (`guu84124`,`demo.live`), skip this section entirely —
-> no sprint configuration is required for demos.
-
-#### Sprint Tenant Checklist
+#### Tenant Configuration Checklist
 
 **Step 4.A — Update `.vscode/mcp.json`**
 
-Replace `<your-tenant-id>` with your personal sprint tenant ID (e.g. `abc12345`):
+Replace `TENANTID` with your tenant ID (e.g. `abc12345`). Use
+`.apps.dynatrace.com` for production tenants or
+`.sprint.apps.dynatracelabs.com` for sprint/lab tenants:
 
 ```json
 {
@@ -171,60 +155,61 @@ Replace `<your-tenant-id>` with your personal sprint tenant ID (e.g. `abc12345`)
         "DT_ENVIRONMENT": "https://guu84124.apps.dynatrace.com"
       }
     },
-    "<your-tenant-id>-mcp": {
+    "TENANTID-mcp": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@dynatrace-oss/dynatrace-mcp-server@latest", "--stdio"],
       "env": {
-        "DT_ENVIRONMENT": "https://<your-tenant-id>.sprint.apps.dynatracelabs.com"
+        "DT_ENVIRONMENT": "https://TENANTID.sprint.apps.dynatracelabs.com"
       }
     }
   }
 }
 ```
 
-**Step 4.B — Update `.mcp.json`**
+**Step 4.B — Mirror the change to `.mcp.json`**
 
-`.mcp.json` is used by Copilot CLI and must stay in sync with `.vscode/mcp.json`.
-Run this command to regenerate it from your updated `.vscode/mcp.json`:
+`.mcp.json` (workspace root) is read by Claude Code, Cursor, and Copilot
+CLI; `.vscode/mcp.json` is read by VS Code. They contain the same data
+but use different schemas (see
+[MCP Configuration Files](#mcp-configuration-files) for the full
+explanation). After any edit, regenerate the root file:
 
 ```bash
 jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json
 ```
 
-Verify the output looks correct before continuing:
+Verify:
 
 ```bash
 cat .mcp.json
 ```
 
-You should see both MCP server entries with your sprint tenant ID in place.
+You should see both entries with your tenant ID in place.
 
 **Step 4.C — Update `.github/copilot-instructions.md` and `CLAUDE.md`**
 
-Find the Environment table in both files and update the fallback server name and URL to match your tenant ID:
+Find the Environment table in both files and update the entry for your
+tenant routing. The example below shows how the demo entry looks (the
+`demo.live` nickname is built into this repo and points at the public
+demo tenant `guu84124.apps.dynatrace.com`); add a matching row for your
+own tenant:
 
 ```
-| **Fallback MCP server** | `<your-tenant-id>-mcp` → https://<your-tenant-id>.sprint.apps.dynatracelabs.com |
+| **Baseline tenant routing** | `demo.live` → https://guu84124.apps.dynatrace.com (public, built into the repo) |
+| **Your tenant routing**     | `<your-nickname>` → https://<your-tenant-id>.apps.dynatrace.com |
 ```
 
-Both `.github/copilot-instructions.md` (GitHub Copilot) and `CLAUDE.md` (Claude Code) must be updated with your tenant ID or they will reference the original author's sprint environment.
+Both files (the GitHub Copilot briefing and the Claude Code briefing) must
+reference your tenant, or the AI will only see the demo routing.
 
-**Step 4.D — Authenticate dtctl**
+**Step 4.D — Authenticate `dtctl` to the same tenant (optional)**
 
-```bash
-# Local desktop (macOS/Windows/Linux with keyring): OAuth login
-dtctl auth login --context <your-tenant-id> \
-  --environment "https://<your-tenant-id>.sprint.apps.dynatracelabs.com"
-
-# GitHub Codespaces / CI: token-based auth
-dtctl config set-context <your-tenant-id> \
-  --environment "https://<your-tenant-id>.sprint.apps.dynatracelabs.com" \
-  --token-ref <your-tenant-id>-token
-dtctl config set-credentials <your-tenant-id>-token --token <YOUR_PLATFORM_TOKEN>
-```
-
-If OAuth fails with a keyring error (for example, `dbus-launch` not found), use the token-based method above.
+MCP and `dtctl` use independent authentication (see
+[How MCP Works](#how-mcp-works-and-when-it-matters)). If you also want
+`dtctl` against this tenant, follow the auth instructions in the
+[dtctl repo](https://github.com/dynatrace-oss/dtctl). MCP itself does not
+depend on `dtctl` being authenticated.
 
 ### 5. Reload VS Code
 
@@ -256,6 +241,25 @@ If you see a table of services with request counts — you are live and ready to
 | dtctl | Terminal access for verification | An inspector who checks the AI's work |
 
 ## Your First Commands
+
+**Verify your tenant connection (terminal):**
+
+```bash
+dtctl config current-context        # which tenant am I pointed at?
+dtctl auth whoami --plain           # am I authenticated?
+dtctl doctor                        # full health check of CLI + auth
+```
+
+If `whoami` returns `User session is no longer active` or `invalid_grant`, run `dtctl auth login` to refresh the session, then re-run the commands above.
+
+**Verify Copilot + MCP (Copilot Chat):**
+
+```
+Use the demo.live server for all queries in this session
+List the top 5 services by request volume in the last hour
+```
+
+**Then try a workflow prompt:**
 
 | Type This | What It Does |
 |---|---|
@@ -323,22 +327,156 @@ The prompts follow a structured drill-down pattern:
 
 Copilot without skills will guess DQL syntax — and get it wrong. For example, it might use `event.status == "OPEN"` (doesn't exist) instead of `event.status == "ACTIVE"`, or `log.level` instead of `loglevel`. The skills encode the corrections for known failure modes before Copilot writes a single query.
 
-### How MCP Works
+### How MCP Works (and when it matters)
 
-The Dynatrace MCP server gives Copilot live API access to your environment. When you run `/health-check`, Copilot calls the MCP server to execute real DQL queries and return live data — not cached or synthetic results.
+This repo is the **MCP server workspace** — its job is to wire an AI
+assistant (GitHub Copilot, Claude Code, etc.) into your Dynatrace tenant
+via the **Model Context Protocol (MCP)** so the AI can call live Dynatrace
+APIs directly.
 
-### The Investigation Rule
+MCP is one of two independent paths the AI uses to reach Dynatrace. The
+other path is **`dtctl`**, a sibling CLI maintained in its own repo:
+[github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl).
+This README only documents the MCP side; for `dtctl` install, auth, and
+usage see that repo.
 
-**Always start with problems, never with broad log searches.** Broad log queries without a problem context will hit Dynatrace's 500GB scan limit and return zero results. The prompts enforce this automatically.
+| Path | How the AI uses it | Where it's configured |
+|---|---|---|
+| **MCP** (this repo) | AI calls MCP tools directly — structured JSON in/out, no terminal round-trip. | `.mcp.json` and `.vscode/mcp.json` in this workspace. |
+| **`dtctl`** (separate repo) | AI runs `dtctl` commands in the integrated terminal. | `~/.dtctl/config` on your machine. |
+
+The two paths are completely independent. Switching `dtctl` to a different
+tenant does **not** redirect MCP traffic, and vice versa. For ordinary
+read-and-query work the AI can drive `dtctl` against any tenant in your
+`dtctl` config without touching MCP at all.
+
+**You only need to update an MCP config file if you want the AI to use
+MCP-only capabilities against a specific tenant** — most notably Davis
+CoPilot. For routine querying, dashboard editing, and notebook work,
+`dtctl` alone is enough.
+
+#### What MCP can do that the AI cannot get any other way
+
+| MCP-only capability | Why it matters |
+|---|---|
+| **Davis CoPilot chat** | Live chat with Dynatrace's hosted Davis CoPilot LLM — only reachable through MCP. |
+| **Davis CoPilot DQL helpers** | Natural language → DQL, and DQL → plain-English explanations, with tenant context. |
+| **Davis Analyzers** | Run forecasting, anomaly detection, and correlation analyzers from chat. |
+| **Notification primitives** | Fire ad-hoc Slack messages and emails directly from a chat session. |
+| **Speed** | Returns structured JSON straight to the AI — no terminal round-trip. Noticeably faster for high-volume sessions. |
+
+**Davis CoPilot is the headline reason** to add a tenant to `mcp.json`.
+Everything else above is icing.
+
+#### When NOT to update `mcp.json`
+
+- You only need to **read** data from a tenant.
+- You're switching between many tenants frequently — `dtctl` is faster for this.
+- It's a private/internal tenant you don't want committed to GitHub.
+- One-off investigations.
 
 ### MCP Configuration Files
 
-This workspace maintains two MCP configuration files that must be kept in sync:
+This workspace ships with two MCP configuration files. They contain the same
+information but are read by different MCP clients.
 
-| File | Used By |
-|---|---|
-| `.vscode/mcp.json` | VS Code GitHub Copilot and Claude Code |
-| `.mcp.json` | GitHub Copilot CLI |
+| File | Read by | Top-level key |
+|---|---|---|
+| `.mcp.json` (workspace root) | Claude Code (CLI/desktop), Cursor, Copilot CLI, generic MCP clients | `mcpServers` |
+| `.vscode/mcp.json` | VS Code (GitHub Copilot Chat, Claude Code extension) | `servers` |
+
+#### Why these files exist
+
+This repo does **not** ship the MCP server code itself. The actual server is
+the upstream Dynatrace package
+[`@dynatrace-oss/dynatrace-mcp-server`](https://www.npmjs.com/package/@dynatrace-oss/dynatrace-mcp-server),
+published on npm by Dynatrace.
+
+MCP clients (VS Code, Claude Code, Cursor, etc.) need a recipe telling them
+*how to start* an MCP server and *which tenant* it should talk to. That recipe
+is exactly what `mcp.json` provides:
+
+- **`command: "npx"`** — instructs the client to run the server via `npx`,
+  which downloads and executes the upstream package on demand. No global
+  install, no separate build step — just Node.js ≥ v18.
+- **`args: ["-y", "@dynatrace-oss/dynatrace-mcp-server@latest", "--stdio"]`**
+  — tells `npx` which package to run and to communicate over stdio (the
+  transport every MCP client supports).
+- **`env.DT_ENVIRONMENT`** — the only tenant-specific input; tells the
+  spawned server which Dynatrace tenant to authenticate against. The
+  server is otherwise tenant-agnostic, so each tenant gets its own entry
+  in `mcp.json` with its own `DT_ENVIRONMENT`.
+
+You can think of `mcp.json` as `package.json` for MCP servers: a manifest
+the client reads to know what to launch, with what arguments, against
+which environment.
+
+#### Why two files?
+
+Two conventions, claimed by two different audiences:
+
+- **Root-level `.mcp.json`** is the editor-agnostic convention used by every
+  MCP client *except* VS Code — it lives at the project root next to other
+  project metadata (`package.json`, `.gitignore`, etc.).
+- **`.vscode/mcp.json`** follows VS Code's long-standing rule that anything
+  VS Code-specific lives under `.vscode/` (alongside `settings.json`,
+  `launch.json`, `tasks.json`). VS Code's MCP loader is hard-coded to look
+  there — it does not read the root `.mcp.json`.
+
+The two files **must be kept in sync**. After editing one, regenerate the
+other:
+
+```bash
+# Regenerate .mcp.json from .vscode/mcp.json
+jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json
+```
+
+#### How to update them
+
+Each entry is a recipe for the MCP client to **launch a local Node.js MCP
+server process pointed at a specific tenant**. The pattern is always the
+same:
+
+```jsonc
+"<server-nickname>": {
+  "type": "stdio",
+  "command": "npx",
+  "args": ["-y", "@dynatrace-oss/dynatrace-mcp-server@latest", "--stdio"],
+  "env": {
+    "DT_ENVIRONMENT": "https://<your-tenant-id>.apps.dynatrace.com"
+  }
+}
+```
+
+- **`<server-nickname>`** — the name you say in chat (e.g. *"Use the
+  `production-mcp` server, list services"*). Convention is to suffix with
+  `-mcp` but anything works. Must be unique within the file.
+- **`DT_ENVIRONMENT`** — the tenant URL. For production tenants use
+  `.apps.dynatrace.com`; for sprint/lab tenants use
+  `.sprint.apps.dynatracelabs.com`.
+
+**Update workflow:**
+
+1. Edit `.vscode/mcp.json` — add or modify a server entry.
+2. Run `jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json` to mirror
+   the change to the root file.
+3. Reload VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*) so the new
+   MCP server subprocess is spawned with the new config.
+4. Verify in Copilot Chat: *"Use the `<server-nickname>` server, list the
+   top 5 services by request volume"*.
+
+#### Why `guu84124` is hard-coded but `TENANTID` is a placeholder
+
+The local MCP server is **tenant-agnostic** — it must be told
+`DT_ENVIRONMENT` at launch. The MCP client reads that URL from `mcp.json`
+and passes it to the spawned process. There is no other discovery
+mechanism today.
+
+- **`guu84124`** is the *public* Dynatrace demo tenant
+  (`demo.live.dynatrace.com`). It's safe to commit because anyone in the
+  world can reach it. A fresh clone of this repo "just works" against it.
+- **`TENANTID`** is a placeholder — replace it locally with your own
+  tenant ID, but don't commit your private ID into a public repo.
 
 When adding or updating MCP servers, always update both files. Regenerate `.mcp.json` from `.vscode/mcp.json` using:
 
@@ -348,32 +486,19 @@ jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json
 
 ---
 
-## dtctl CLI
+## dtctl CLI (separate repo)
 
-[dtctl](https://github.com/dynatrace-oss/dtctl) is a kubectl-style CLI for Dynatrace that complements this workspace — giving you terminal-level access to run DQL queries, manage workflows, verify notebooks, and more.
+[dtctl](https://github.com/dynatrace-oss/dtctl) is a sibling kubectl-style CLI for Dynatrace, maintained in its own repository. It complements this MCP workspace by giving you (and the AI) terminal-level access to run DQL queries, manage workflows, and verify notebooks.
 
-```bash
-# macOS / Linux — direct install (no package manager required)
-curl -fsSL https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.sh | bash
+This README intentionally **does not** duplicate `dtctl` install, auth, or usage docs — those live in the dtctl repo and evolve independently. Refer to:
 
-# Local desktop (macOS/Windows/Linux with keyring): OAuth login
-dtctl auth login --context demo.live \
-  --environment "https://guu84124.apps.dynatrace.com"
+**→ [github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl)**
 
-# GitHub Codespaces / CI: token-based auth
-dtctl config set-context demo.live \
-  --environment "https://guu84124.apps.dynatrace.com" \
-  --token-ref demo.live-token
-dtctl config set-credentials demo.live-token --token <YOUR_PLATFORM_TOKEN>
+for installation, OAuth and token-based auth, safety levels, context management, and command reference.
 
-# Verify
-dtctl doctor
-
-# Example commands
-dtctl get workflows
-dtctl get notebooks
-dtctl query 'fetch dt.davis.problems | filter event.status == "ACTIVE" | limit 5'
-```
+> **Side note:** I also maintain a personal fork at
+> [github.com/israel-salgado/dtctl](https://github.com/israel-salgado/dtctl)
+> with a few experimental edits (mostly README clarifications I plan to upstream). Feel free to peek, but the `dynatrace-oss/dtctl` repo above is the authoritative source and is what the rest of this document references.
 
 ---
 

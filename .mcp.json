@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "[YOURTENANTID]-mcp": {
+    "TENANTID-mcp": {
       "type": "stdio",
       "command": "npx",
       "args": [
@@ -9,7 +9,7 @@
         "--stdio"
       ],
       "env": {
-        "DT_ENVIRONMENT": "https://[YOURTENANTID].apps.dynatrace.com"
+        "DT_ENVIRONMENT": "https://TENANTID.apps.dynatrace.com"
       }
     },
     "demo.live": {

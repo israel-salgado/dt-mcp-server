@@ -34,6 +34,121 @@ This ensures identical behavior across agents.
 - Always keep a timestamped "before-user-edit" snapshot in the per-app folder with notes for easy revert.
 - Never silently overwrite user work. Report ownership/access constraints.
 
+## File-System Boundaries (All Agents)
+
+Agents (and any subagents they spawn) should treat the **workspace folder** (wherever the user has cloned/installed this repo) as the default and primary scope for all file operations.
+
+- **Default scope**: stay within the workspace root and its subfolders. This applies regardless of where the user installed it (e.g. `~/code/dt-mcp-server`, `C:\github\dt-mcp-server`, `/workspaces/dt-mcp-server`).
+- **Reads outside the workspace**: allowed when there is a clear, legitimate reason (e.g. inspecting a tool's own config, verifying credential storage, reading a referenced doc). Before doing so, **state the reason in plain language** so the user can decide whether to approve. The user has final discretion.
+- **Writes outside the workspace**: never silent. Always ask for explicit permission first and explain why. Default answer is no.
+- **Large or transient outputs**: prefer saving them inside the workspace under `temp_dtctl_files/` (or `temp_<type>_files/`). If something useful exists outside the workspace and you need it locally, copy it in rather than reading it in place repeatedly.
+- **Subagent prompts**: inherit this same rule. When delegating execution work, include a short note that file operations should stay inside the workspace unless the subagent has a clear reason to step outside, in which case it should report the reason back rather than act silently.
+
+The spirit of the rule: flexibility for reads when justified, strict guardrails on writes, and transparency about *why* whenever the agent needs to step outside the workspace.
+
+## Connecting to a New Tenant (dtctl)
+
+When the user asks to connect to / switch to a new Dynatrace tenant ID (e.g. `bhs56704`, `dff72816`):
+
+1. Run `dtctl config get-contexts` to see if the context already exists. If it does, just `dtctl config use-context <id>` and verify.
+2. If it is new, ask the user (e.g. via `vscode_askQuestions`) for two inputs:
+   - **Environment URL** — offer three options based on the tenant ID:
+     - `https://<id>.apps.dynatrace.com` — production (default for customers)
+     - `https://<id>.sprint.apps.dynatracelabs.com` — sprint/lab (Dynatrace internal only)
+     - `https://<id>.live.dynatrace.com` — classic Gen2
+   - **Safety level** — `readonly` / `readwrite-mine` (recommended) / `readwrite-all` / `dangerously-unrestricted`. dtctl's own default is `readwrite-all` if `--safety-level` is omitted; this repo recommends `readwrite-mine` for routine work and `readonly` when you only need to query. See [README.md](README.md) → *Safety Levels* for what each level allows.
+   Auth method defaults to OAuth interactive; only ask if the user has indicated otherwise.
+3. Run:
+   ```
+   dtctl auth login --environment <URL> --context <id> --safety-level <level>
+   ```
+   Use async terminal mode (~15s timeout). The command opens a browser for SSO and on success prints `Context '<id>' configured and activated`. Tokens are stored in the OS credential store (Windows Credential Manager on Windows, Keychain on macOS, libsecret on Linux) under `<id>-oauth`.
+4. Verify with `dtctl config current-context; dtctl auth whoami --plain`.
+
+**Notes**
+- `dtctl auth login` auto-detects the environment class (prod/sprint/hard) from the URL and selects the matching OAuth client + SSO host (`sso.dynatrace.com` for prod/classic, `sso-sprint.dynatracelabs.com` for sprint).
+- Login also activates the new context — no separate `use-context` step needed.
+- This only configures the **dtctl** context. Copilot's MCP routing is separate — entries in `.mcp.json` are **tenant routings** of this workspace's local MCP server. Add a tenant routing only if you want Copilot to reach that tenant by name; dtctl-only access does not require it.
+- **Who can do this**: anyone with valid Dynatrace credentials for the target tenant. Sprint/lab tenants are restricted to Dynatrace internal accounts because their SSO host doesn't accept external identities; production and classic tenants are open to any authorised user of that tenant.
+- Do **not** add tenant-specific IDs to root source files. Per-tenant artifacts go in `temp_dtctl_files/` (or another `temp_<type>_files/` folder).
+- After connecting, tell the user whether a matching `.mcp.json` tenant routing also needs to be added.
+- After a successful connect, **offer to record a nickname** for the tenant in the Local Tenant Nickname Registry (next section).
+
+## Local Tenant Nickname Registry
+
+To keep the repo generic (the only tenant ID referenced in committed source is the public baseline `guu84124`, reachable at `demo.live.dynatrace.com`) while still letting users say *"switch to **<NICKNAME>**"* instead of *"switch to **<TENANTID>**"*, agents maintain a **local-only** nickname registry.
+
+**Location** (always — never anywhere else):
+```
+temp_dtctl_files/tenant-memory/tenants.json
+```
+This path lives under `temp_dtctl_files/`, which is `.gitignore`d, so the registry **never** gets pushed to GitHub. The `tenant-memory/` subfolder is reserved for this purpose; agents must auto-create it (with an empty `tenants.json`) on first use.
+
+**Seeding rule.** The registry only ever contains tenants the user has actually authenticated against. On a fresh clone the agent creates an empty file (`{ "schema": 1, "tenants": [] }`) — *not* a pre-seeded list. After the first successful `dtctl auth login`, the agent offers to record the new tenant under a nickname.
+
+**dtctl persistence vs. agent behavior.** `dtctl config current-context` is **persistent on disk** — once you switch, it stays switched until you switch again, including across VS Code restarts. The agent treats this as the source of truth: at session start it runs `dtctl config current-context`, reports the active context in one line, and **does not change it without an explicit user instruction**. There is no concept of a global "default tenant."
+
+**Schema** (JSON, lowercase nicknames):
+```jsonc
+{
+  "schema": 1,
+  "tenants": [
+    {
+      "nickname": "<NICKNAME>",
+      "id": "<TENANTID>",
+      "context": "<TENANTID>",     // dtctl context name; defaults to id if omitted
+      "url": "https://<TENANTID>.<class>.dynatrace[labs].com",
+      "class": "prod",            // prod | sprint | classic (see class table)
+      "safety": "readwrite-mine",  // readonly | readwrite-mine | readwrite-all | dangerously-unrestricted
+      "notes": "Free-text description"
+    }
+  ]
+}
+```
+
+**`class` field.** Values are `prod` | `sprint` | `classic` — the human-friendly labels used internally and in this repo. Note that `dtctl auth login` reports the sprint class as `hard` in its `Detected environment:` output (an internal name). The registry uses `sprint` for clarity; treat dtctl's `hard` and the registry's `sprint` as the same thing.
+
+**`context` field.** dtctl context names are independent of tenant IDs — a user can create a context with any name (e.g. `dtctl auth login --context my-prod`). The *Connecting to a New Tenant* flow in this repo always sets `--context <id>`, so for tenants created via that flow `context` equals `id` and may be omitted. For contexts created manually with custom names, set `context` explicitly so the registry can resolve nickname → dtctl context. Resolution always runs `dtctl config use-context <context-or-id>`.
+
+### Resolution rules ("ask, don't guess")
+When the user says *"connect to / switch to **<name>**"*:
+1. **Exact unique match** → echo `nickname · id · class · safety` in a one-line confirmation and proceed.
+2. **Exact match but stale** (`dtctl config get-contexts` no longer has it) → tell the user, offer to re-auth or remove the entry.
+3. **No match** → fall back to *Connecting to a New Tenant* (above), then offer to save a nickname at the end.
+4. **Multiple matches / collision** → list all candidates and ask which one. Never pick automatically.
+5. **Fuzzy / partial match** (e.g. user says "lit") → never auto-resolve. Show top candidates and ask.
+6. **Ambiguous intent words** ("dev", "test", "demo", "prod", "lab") → always confirm before switching, even on a unique match.
+
+### Save / update rules
+When recording a new entry (or updating an existing one), prompt the user (use `vscode_askQuestions` with labelled options, same UX as the new-tenant flow) for:
+- **URL pattern** — `https://<id>.apps.dynatrace.com` (prod) / `https://<id>.sprint.apps.dynatracelabs.com` (sprint) / `https://<id>.live.dynatrace.com` (classic).
+- **Safety level** — `readwrite-mine` (repo default) / `readonly` / `readwrite-all` / `dangerously-unrestricted`. See [README.md](README.md) → *Safety Levels*.
+- **Nickname** — free text, lowercased on save. **If the user does not provide one, default to the full exact tenant ID** (e.g. `guu84124`, not a 3-letter abbreviation). The user can rename it later, which overwrites the entry.
+- **Context** — only ask if it differs from the tenant ID (e.g. user authenticated manually with a custom `--context` name). Otherwise omit the field; resolution falls back to `id`.
+
+Validation before writing:
+- Nickname matches `^[a-z0-9][a-z0-9._-]{1,30}$` (no spaces or weird chars; bounded length).
+- Tenant ID matches the URL's host prefix — if not, ask which is right.
+- If `context` is set, it must exist in `dtctl config get-contexts`. If absent, warn and offer to re-auth.
+- On collision, offer three actions: rename the new one, overwrite the old one, or cancel. **Never silently overwrite.**
+- Optional sanity check: run `dtctl auth whoami --plain --context <context-or-id>` after save and warn if it fails.
+
+### Confirmation message (always identical, one line)
+```
+Switching context → <NICKNAME> · <TENANTID> · <class> · <safety>
+Proceed?
+```
+
+### Session start
+At session start the agent runs `dtctl config current-context` and reports the active context in one line, e.g. `Active dtctl context: <NICKNAME> · <TENANTID> · <class> · <safety>` (resolving via the registry where possible). It does **not** auto-switch. If the active context is unknown to the registry, the agent asks the user how to proceed.
+
+### Edge cases
+- **Same tenant ID, multiple safety levels**: allowed — nickname is the key, not the ID (e.g. `<NICKNAME>-ro` and `<NICKNAME>-rw` for the same tenant).
+- **Hand edits**: honor them. The agent must treat user edits as truth and not silently rewrite.
+- **Removal**: confirm before removing. Offer to also `dtctl auth logout --context <id>` if the user is decommissioning entirely.
+- **First run on a fresh clone**: the file does not exist. Auto-create `temp_dtctl_files/tenant-memory/` and an empty `tenants.json` (`{ "schema": 1, "tenants": [] }`) before adding the first nickname. Suggest the public baseline tenant `guu84124` (`demo.live.dynatrace.com`) as a safe first connection — the user may nickname it `demo.live` (matching its public URL) or anything else.
+- **MCP exception**: `.mcp.json` is the **one allowed location** in the repo where tenant IDs may appear, because VS Code reads it as a real file. The nickname registry does not replace it; users who want Copilot to reach a tenant by name must still add a tenant routing entry to `.mcp.json` by hand (see `ARCHITECTURE.md` → *MCP Server*).
+
 ## DQL Rules (All Agents)
 - Use unique `event.type` + `event.provider` for workflow isolation.
 - Dashboard tiles are stricter than notebooks/standalone: Avoid `summarize {..} by {..}` if "'by' isnt allowed here". Prefer `fields`/`fieldsAdd bin()`/`sort`/`limit`. Validate in *exact* target context (live tile, notebook section, MCP `execute_dql`, `dtctl query`).
@@ -53,5 +168,6 @@ After any change to governing files, this file, memory, or SKILL.md:
 - Use `temp_dtctl_files/` for experiments only.
 - Update this file when new patterns or lessons emerge.
 - The memory system (`/memories/repo/`) holds AI-side notes; committed rules live here.
+- **Use clickable options for short choices.** When asking the user a question with 2–6 short fixed answers (yes/no, "do A / do B / skip", confirmations, approve/reject), use `vscode_askQuestions` with labeled options and keep `allowFreeformInput` enabled (default) so the user can still type a custom answer. Reserve plain-text questions for open-ended prompts or when each option needs a paragraph of explanation. Do **not** use clickable options for explanations, recommendations, or anything the user is meant to read rather than choose between.
 
 This ensures predictable, safe, file-aware behavior for any user or AI.

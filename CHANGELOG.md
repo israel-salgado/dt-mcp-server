@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **`ELI5.md`**: Deleted the standalone beginner-friendly install guide. Its content was largely redundant with the README's setup section. The README's Setup steps (1–6) have been expanded with clearer, more beginner-friendly install instructions — including explicit `dtctl` references — to absorb the useful parts of `ELI5.md`. Also removed the stale `ELI5.md` entry from the README's "What's Inside" file tree.
+
 ### Added
 - **CONVENTIONS.md**: Created committed single source of truth for all agent rules (initialization sequence, Workspace & Temp File Conventions, Live State Reconciliation & Conflict Protection, DQL rules, Sync Checklist). Migrated from memory file to make rules portable for GitHub forks. Updated all governing files (`copilot-instructions.md`, `CLAUDE.md`), skills (`dt-dql-essentials/SKILL.md`, `dt-app-notebooks/SKILL.md`), `ARCHITECTURE.md`, `CHEATSHEET.md`, and memory to reference it first. This ensures every AI knows to check for manual edits before any tenant push/apply.
 - **`scripts/validate-tenant-write.ps1`**: Generalized pre-write validator (with prominent behavior comments). Runs before any dtctl tenant write on editable resources (notebooks, dashboards, workflows, etc.). Detects manual user edits and performs type-specific checks. Integrated into CONVENTIONS.md, README.md, and skills.

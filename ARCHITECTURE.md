@@ -49,8 +49,8 @@ This workspace solves all four problems by combining three things: domain knowle
 ┌───────────────────────────────────────────────────────────┐
 │              Dynatrace Platform                           │
 │                                                           │
-│   guu84124.apps.dynatrace.com  (production)               │
-│   tdg63684.sprint.apps.dynatracelabs.com  (sprint)        │
+│   guu84124.apps.dynatrace.com  (production, public baseline)  │
+│   <TENANTID>.<class>.dynatrace[labs].com  (any other)        │
 │                                                           │
 │   Grail data lakehouse — logs, spans, metrics, events     │
 │   Davis AI — problem detection, root cause analysis       │
@@ -100,14 +100,14 @@ This means all 13 skills can be installed without performance penalty — Copilo
 
 The Model Context Protocol (MCP) server is the live data bridge between Copilot and Dynatrace. When Copilot needs to answer a question about your environment, it calls the MCP server, which executes real API calls and DQL queries against your Dynatrace tenant and returns live results.
 
-Two environments are configured as named servers:
+This workspace runs **one** local MCP server (launched via `.mcp.json`). Each named entry in `.mcp.json` is just a **tenant routing** — a different `DT_ENVIRONMENT` for that same server, so Copilot can talk to multiple tenants by name without launching multiple servers:
 
 ```json
-demo.live  →  https://guu84124.apps.dynatrace.com        (production)
-guu84124  →  https://guu84124.apps.dynatrace.com        (production)
-YOURTENANTID-mcp  →  https://YOURTENANTID.sprint.apps.dynatracelabs.com  (sprint)
-NICKNAME  →  https://YOURTENANTID.sprint.apps.dynatracelabs.com  (sprint)
+demo.live   →  https://guu84124.apps.dynatrace.com               (production, public baseline, committed)
+<NICKNAME>  →  https://<TENANTID>.<class>.dynatrace[labs].com    (added per machine, not committed)
 ```
+
+Only the public baseline routing (`guu84124`) is committed to the repo. Additional **tenant routings** can be added by hand to `.mcp.json` if you want Copilot to reach another tenant by name. `.mcp.json` is the **one allowed location** in the repo where tenant IDs may appear (because VS Code reads it as a real file); per-tenant artifacts and the local nickname registry live under `temp_dtctl_files/` and never get pushed.
 
 Authentication uses OAuth browser SSO — no API tokens or credentials are stored in the workspace. To target a specific environment in a Copilot session:
 
@@ -199,19 +199,19 @@ dtctl doctor                           # Verify authentication and connectivity
 Three authenticated contexts are configured:
 
 ```
-demo.live   →  production  (default)
-guu84124   →  production 
-YOURTENANTID   →  sprint
-liit   →  sprint
+demo.live    →  production  (public baseline, committed)
+<NICKNAME>   →  any class   (added locally per machine)
+<TENANTID>   →  any class   (added locally per machine)
 ```
 
-Switch between them with:
+Switch between them with either the nickname or the raw tenant ID:
 ```bash
 dtctl config use-context demo.live
-dtctl config use-context guu84124
-dtctl config use-context YOURTENANTID
-dtctl config use-context liit
+dtctl config use-context <NICKNAME>      # e.g. "lab", resolved via tenant-memory/tenants.json
+dtctl config use-context <TENANTID>      # raw 8-char tenant ID, always works
 ```
+
+**Nickname resolution.** When you say *"switch to <NICKNAME>"* in chat, the agent resolves the short name via the local-only registry at `temp_dtctl_files/tenant-memory/tenants.json` (auto-created on first use, gitignored). It looks up the matching `id` / `url` / `class` / `safety`, echoes a one-line confirmation (`Switching context → <NICKNAME> · <TENANTID> · <class> · <safety>`), then runs `dtctl config use-context <TENANTID>`. Ambiguous or fuzzy names are never auto-resolved — the agent asks first. See `CONVENTIONS.md` → *Connecting to a New Tenant* and *Local Tenant Nickname Registry* for the full procedure (URL options, safety levels, save/update rules).
 
 ---
 
@@ -267,11 +267,7 @@ git commit -m "Update skills to latest — $(date +%Y-%m-%d)"
 git push
 ```
 
-Update `dtctl` by re-running the install script:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/dynatrace-oss/dtctl/main/install.sh | bash
-```
+Update `dtctl` by following the upgrade instructions in the dtctl repo: **[github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl)** (Homebrew, install script, or `go install` — whichever method you used originally).
 
 ---
 
