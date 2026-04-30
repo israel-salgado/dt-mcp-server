@@ -118,31 +118,65 @@ Follow the install + authentication instructions in the official dtctl repo:
 
 Once installed, return here and continue with Step 4. A working `dtctl --version` and an authenticated context (verified with `dtctl auth whoami --plain`) is the only thing this workspace needs from it.
 
+#### Two paths to Dynatrace
+
+The AI can reach Dynatrace **two independent ways**. Both can do most of the same work today; you can use either, both, or switch between them at any time.
+
+| | **`dtctl`** | **MCP** |
+|---|---|---|
+| **What it is** | A CLI the AI runs in your terminal | A direct API bridge the AI calls in-process |
+| **Configured in** | Step 3 (install + auth) | Step 4 (`mcp.json` files) |
+| **Visible to you** | Yes — commands appear in the integrated terminal | No — runs silently |
+| **Run DQL queries** | ✅ | ✅ |
+| **Read entities (services, hosts, problems, vulnerabilities)** | ✅ | ✅ |
+| **Create/edit notebooks, dashboards, workflows, settings** | ✅ | ✅ |
+| **Davis CoPilot chat** | ✅ (`dtctl exec copilot`) | ✅ (`chat_with_davis_copilot`) |
+| **Davis Analyzers (forecasting, anomaly detection)** | ✅ (`dtctl exec analyzer`) | ✅ (`execute_davis_analyzer`) |
+| **Switch tenants from chat** | *"switch to `<nickname>`"* (uses your registry) | *"use the `<nickname>` server, …"* (uses MCP server name) |
+| **Declarative apply / diff / history / restore** | ✅ | — |
+| **Document sharing (`share` / `unshare`)** | ✅ | — |
+| **Persistent multi-context config + safety levels** | ✅ | — (one tenant per server entry) |
+| **Multiple output formats (json / yaml / csv / toon / table / wide)** | ✅ | — (always JSON) |
+| **AI skills installer (`dtctl skills install`)** | ✅ | — |
+| **Send ad-hoc Slack message from chat** | — | ✅ |
+| **Send ad-hoc email from chat** | — | ✅ |
+| **Ingest a custom event (`send_event`)** | — | ✅ |
+| **Reset Grail query budget** | — | ✅ |
+| **Natural-language → DQL helpers (one-shot)** | — | ✅ |
+
+**Bottom line:** Both are first-class. Configure whichever you'll use; configure both if you want every capability available at all times.
+
 ### 4. Configure additional tenants for MCP (optional)
 
-> **Skip this entire section unless you specifically want the AI to use
-> MCP-only capabilities (Davis CoPilot chat, Davis Analyzers, etc.) against
-> a tenant other than the public demo tenant.** For ordinary AI-driven work
-> against any tenant — querying, building dashboards, editing notebooks —
-> `dtctl` alone is enough. The AI can drive `dtctl` for you. See
-> [How MCP Works (and when it matters)](#how-mcp-works-and-when-it-matters)
-> in the Key Concepts section for the full breakdown.
+> **Just want to query the public demo tenant?** Skip this entire section and go to Step 5 — the workspace already works against `demo.live` out of the box.
+>
+> **Want the AI to talk to your own Dynatrace tenant via MCP?** Keep going. (For the full capability comparison between MCP and `dtctl`, see the table just above.)
 
 The workspace is pre-configured with two MCP server entries: the shared
-demo tenant (`demo.live` → `guu84124`, public) and a `TENANTID-mcp`
+demo tenant (`demo.live` → `guu84124`, public) and a `NICKNAME`
 placeholder you can rename to your own tenant.
 
-Complete all four sub-steps below to add your tenant. Skipping any step
-will leave the AI referencing a server that doesn't exist or pointing at
-the wrong environment.
+Complete sub-steps **4.A–4.C** to add your tenant. Step **4.D** is optional cosmetic polish — skip it if you don't care about the AI's session-start banner mentioning your tenant by name.
 
 #### Tenant Configuration Checklist
 
 **Step 4.A — Update `.vscode/mcp.json`**
 
-Replace `TENANTID` with your tenant ID (e.g. `abc12345`). Use
-`.apps.dynatrace.com` for production tenants or
-`.sprint.apps.dynatracelabs.com` for sprint/lab tenants:
+You'll edit two things in the JSON below: `NICKNAME` and `TENANTID`.
+
+- **`TENANTID`** is the 8-character code at the start of your Dynatrace URL. Example: for `https://abc12345.apps.dynatrace.com`, your tenant ID is `abc12345`.
+
+  > _**Where to find it:** open Dynatrace in your browser and look at the address bar. The first 8 characters of the hostname are your tenant ID._
+  >
+  > _![Tenant ID location in Dynatrace URL bar](docs/images/tenant-id-location.png)_
+  >
+  > _(If the screenshot above is missing, see `docs/images/README.md` for instructions on adding it.)_
+
+- **`NICKNAME`** is any short label you'll remember. You'll say it in chat — *"use the **prod-east** server, list services"*. Pick anything: `prod-east`, `sandbox`, `liit`, etc.
+- **The URL ending** depends on which kind of tenant you have:
+  - If your Dynatrace URL ends in `.apps.dynatrace.com` → use that (this is what almost everyone has).
+  - If it ends in `.sprint.apps.dynatracelabs.com` → use that (internal Dynatrace lab tenants only).
+  - When in doubt, use the first one.
 
 ```json
 {
@@ -155,12 +189,12 @@ Replace `TENANTID` with your tenant ID (e.g. `abc12345`). Use
         "DT_ENVIRONMENT": "https://guu84124.apps.dynatrace.com"
       }
     },
-    "TENANTID-mcp": {
+    "NICKNAME": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "@dynatrace-oss/dynatrace-mcp-server@latest", "--stdio"],
       "env": {
-        "DT_ENVIRONMENT": "https://TENANTID.sprint.apps.dynatracelabs.com"
+        "DT_ENVIRONMENT": "https://TENANTID.apps.dynatrace.com"
       }
     }
   }
@@ -169,51 +203,77 @@ Replace `TENANTID` with your tenant ID (e.g. `abc12345`). Use
 
 **Step 4.B — Mirror the change to `.mcp.json`**
 
-`.mcp.json` (workspace root) is read by Claude Code, Cursor, and Copilot
-CLI; `.vscode/mcp.json` is read by VS Code. They contain the same data
-but use different schemas (see
-[MCP Configuration Files](#mcp-configuration-files) for the full
-explanation). After any edit, regenerate the root file:
+This workspace ships **two** MCP config files that must stay in sync:
 
-```bash
-jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json
+| File | Read by |
+|---|---|
+| `.vscode/mcp.json` | VS Code (GitHub Copilot Chat) |
+| `.mcp.json` (workspace root) | Claude Code, Cursor, Copilot CLI, other MCP clients |
+
+They contain the same servers — only the top-level key name differs (`servers` in the VS Code file, `mcpServers` in the root file).
+
+**Easiest way: just ask the AI.** In Copilot Chat (or Claude Code), paste:
+
+> *"I added a new tenant to `.vscode/mcp.json`. Mirror it into `.mcp.json` and confirm both files match."*
+
+The AI will copy the new entry across, fix the top-level key, and verify the two files are in sync.
+
+**Prefer to do it by hand?** Open both files in VS Code side-by-side and copy the new entry across. The only thing to watch for is the top-level key — `servers` in `.vscode/mcp.json`, `mcpServers` in `.mcp.json`.
+
+**Why this matters:** if the two files drift, VS Code and Claude Code will see different lists of tenants, and you'll get confusing *"unknown server"* errors when switching tools.
+
+**Step 4.C — Register the same nickname for `dtctl` shortcuts**
+
+Pick the **same nickname** you used in 4.A (e.g. `YOURNICKNAME`, `prod-east`, `sandbox`) and add it to the local nickname registry at `temp_dtctl_files/tenant-memory/tenants.json`. This is what makes *"switch to `<nickname>`"* work in chat — the AI uses this file to translate your short name into the full `dtctl` context the AI then activates.
+
+Using the same nickname in both places (MCP server name + dtctl registry) means you only ever have to remember one word per tenant.
+
+**Easiest way: just ask the AI.** In Copilot Chat or Claude Code, paste (replacing the values with yours):
+
+> *"Add my tenant to the nickname registry at `temp_dtctl_files/tenant-memory/tenants.json`. Nickname: `YOURNICKNAME`. Tenant ID: `abc12345`. URL: `https://abc12345.apps.dynatrace.com`. Class: `prod`. Safety: `readwrite-mine`."*
+
+**Prefer to do it by hand?** Open `temp_dtctl_files/tenant-memory/tenants.json` and add an entry inside the `"tenants"` array:
+
+```json
+{
+  "nickname": "YOURNICKNAME",
+  "id": "abc12345",
+  "url": "https://abc12345.apps.dynatrace.com",
+  "class": "prod",
+  "safety": "readwrite-mine",
+  "notes": "Personal tenant."
+}
 ```
 
-Verify:
+Field values:
+- `nickname` — same as your MCP server name from 4.A.
+- `id` / `url` — same tenant ID and URL from 4.A.
+- `class` — `prod` or `sprint`.
+- `safety` — controls what the AI is allowed to do in this tenant. Pick one:
+  - `readonly` — query only; cannot create, update, or delete anything.
+  - `readwrite-mine` *(recommended)* — read everything; create/update/delete only resources you own (your notebooks, dashboards, workflows).
+  - `readwrite-all` — read everything; create/update/delete any resource in the tenant.
+  - `dangerously-unrestricted` — everything in `readwrite-all` plus permanent deletes (e.g. emptying trash). Use only when you really mean it.
 
-```bash
-cat .mcp.json
-```
+> **Note:** The registry file lives in `temp_dtctl_files/` and is intentionally git-ignored — your tenant entries stay local and never get pushed.
 
-You should see both entries with your tenant ID in place.
+**Step 4.D — Update the briefing tables (optional, cosmetic)**
 
-**Step 4.C — Update `.github/copilot-instructions.md` and `CLAUDE.md`**
+If you want the AI's session-start summary to mention your tenant by name (rather than only `demo.live`), ask the AI to add a one-line row to the Environment table in `.github/copilot-instructions.md` and `CLAUDE.md`:
 
-Find the Environment table in both files and update the entry for your
-tenant routing. The example below shows how the demo entry looks (the
-`demo.live` nickname is built into this repo and points at the public
-demo tenant `guu84124.apps.dynatrace.com`); add a matching row for your
-own tenant:
+> *"Add a row for my tenant `<your-nickname>` to the Environment table in `.github/copilot-instructions.md` and `CLAUDE.md`."*
 
-```
-| **Baseline tenant routing** | `demo.live` → https://guu84124.apps.dynatrace.com (public, built into the repo) |
-| **Your tenant routing**     | `<your-nickname>` → https://<your-tenant-id>.apps.dynatrace.com |
-```
+Skip this if you don't care about the session-start banner — everything else works without it.
 
-Both files (the GitHub Copilot briefing and the Claude Code briefing) must
-reference your tenant, or the AI will only see the demo routing.
+> **Note on `dtctl` authentication:** You already configured `dtctl` in [Step 3](#3-install-dtctl-separate-repo). MCP and `dtctl` are independent authentication paths — nothing more to do here.
 
-**Step 4.D — Authenticate `dtctl` to the same tenant (optional)**
+#### How you'll know Step 4 worked
 
-MCP and `dtctl` use independent authentication (see
-[How MCP Works](#how-mcp-works-and-when-it-matters)). If you also want
-`dtctl` against this tenant, follow the auth instructions in the
-[dtctl repo](https://github.com/dynatrace-oss/dtctl). MCP itself does not
-depend on `dtctl` being authenticated.
+After you finish 4.A–4.C and reload VS Code (Step 5), the verify command in [Step 6](#6-verify-the-connection) using your nickname should return real services from your tenant. If it does — you're done.
 
 ### 5. Reload VS Code
 
-Press `Cmd+Shift+P` → `Developer: Reload Window`
+Press `Ctrl+Shift+P` (Windows / Linux) or `Cmd+Shift+P` (Mac) → `Developer: Reload Window`
 
 When you first use a prompt in Copilot Chat, a browser window will open for
 Dynatrace SSO authentication. This is expected — complete the login and return
@@ -221,13 +281,19 @@ to VS Code. Subsequent sessions authenticate automatically.
 
 ### 6. Verify the connection
 
-**GitHub Copilot users:** In Copilot Chat, type:
+**Quick test against the public demo tenant** — in Copilot Chat (or Claude Code), type:
 
 ```
 Using the demo.live server, list the top 5 services by request volume in the last hour
 ```
 
-**Claude Code users:** In Claude Code, type the same query or copy it from the GitHub Copilot instruction above.
+**If you completed Step 4 with your own tenant**, try the same query against your nickname:
+
+```
+Using the <your-nickname> server, list the top 5 services by request volume in the last hour
+```
+
+(For example: *"Using the **prod-east** server, list the top 5 services…"*)
 
 If you see a table of services with request counts — you are live and ready to demo.
 
@@ -236,9 +302,9 @@ If you see a table of services with request counts — you are live and ready to
 | Piece | What It Does | Analogy |
 |---|---|---|
 | Skills | Domain knowledge about Dynatrace | A textbook the AI reads before answering |
-| MCP server | Live connection to your Dynatrace data | A phone line to production |
+| `dtctl` | One way the AI reaches Dynatrace — by running CLI commands in your terminal | A keyboard the AI uses to type at a console |
+| MCP server | The other way the AI reaches Dynatrace — a direct API bridge it calls in-process | A direct phone line to the platform |
 | Prompts | Pre-built investigation workflows | Recipes you follow step by step |
-| dtctl | Terminal access for verification | An inspector who checks the AI's work |
 
 ## Your First Commands
 
@@ -337,43 +403,13 @@ APIs directly.
 MCP is one of two independent paths the AI uses to reach Dynatrace. The
 other path is **`dtctl`**, a sibling CLI maintained in its own repo:
 [github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl).
-This README only documents the MCP side; for `dtctl` install, auth, and
-usage see that repo.
+Both paths are first-class and largely overlap in capability today — see
+[Two paths to Dynatrace](#two-paths-to-dynatrace-read-this-once) above
+for a side-by-side capability comparison so you can decide which to
+configure (or configure both).
 
-| Path | How the AI uses it | Where it's configured |
-|---|---|---|
-| **MCP** (this repo) | AI calls MCP tools directly — structured JSON in/out, no terminal round-trip. | `.mcp.json` and `.vscode/mcp.json` in this workspace. |
-| **`dtctl`** (separate repo) | AI runs `dtctl` commands in the integrated terminal. | `~/.dtctl/config` on your machine. |
-
-The two paths are completely independent. Switching `dtctl` to a different
-tenant does **not** redirect MCP traffic, and vice versa. For ordinary
-read-and-query work the AI can drive `dtctl` against any tenant in your
-`dtctl` config without touching MCP at all.
-
-**You only need to update an MCP config file if you want the AI to use
-MCP-only capabilities against a specific tenant** — most notably Davis
-CoPilot. For routine querying, dashboard editing, and notebook work,
-`dtctl` alone is enough.
-
-#### What MCP can do that the AI cannot get any other way
-
-| MCP-only capability | Why it matters |
-|---|---|
-| **Davis CoPilot chat** | Live chat with Dynatrace's hosted Davis CoPilot LLM — only reachable through MCP. |
-| **Davis CoPilot DQL helpers** | Natural language → DQL, and DQL → plain-English explanations, with tenant context. |
-| **Davis Analyzers** | Run forecasting, anomaly detection, and correlation analyzers from chat. |
-| **Notification primitives** | Fire ad-hoc Slack messages and emails directly from a chat session. |
-| **Speed** | Returns structured JSON straight to the AI — no terminal round-trip. Noticeably faster for high-volume sessions. |
-
-**Davis CoPilot is the headline reason** to add a tenant to `mcp.json`.
-Everything else above is icing.
-
-#### When NOT to update `mcp.json`
-
-- You only need to **read** data from a tenant.
-- You're switching between many tenants frequently — `dtctl` is faster for this.
-- It's a private/internal tenant you don't want committed to GitHub.
-- One-off investigations.
+The two paths are completely independent: switching `dtctl` to a different
+tenant does **not** redirect MCP traffic, and vice versa.
 
 ### MCP Configuration Files
 
