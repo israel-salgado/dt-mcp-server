@@ -10,19 +10,39 @@ An AI-powered observability workspace for Dynatrace — combining GitHub Copilot
 
 ---
 
+## Quickstart (demo.live)
+
+If you're a Dynatrace employee/partner and just want to use the pre-configured public demo tenant (`demo.live` → `guu84124.apps.dynatrace.com`), you can skip most of the optional configuration and do only:
+
+1. [Clone this workspace](#1-clone-this-workspace)
+2. [Update skills to latest](#2-update-skills-to-latest)
+3. [Reload VS Code](#5-reload-vs-code)
+4. [Verify the connection](#6-verify-the-connection)
+
+You can skip Step 3 (`dtctl`) and Step 4 (adding your own MCP tenant) unless you specifically need them.
+
+## Table of Contents
+
+- [This is an MCP repo (and `dtctl` is a separate one)](#this-is-an-mcp-repo-and-dtctl-is-a-separate-one)
+- [What's Inside](#whats-inside)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [What Just Happened?](#what-just-happened)
+- [Your First Commands](#your-first-commands)
+- [Skills](#skills)
+- [Prompts](#prompts)
+- [Key Concepts](#key-concepts)
+- [Keeping Up to Date](#keeping-up-to-date)
+
 ## This is an MCP repo (and `dtctl` is a separate one)
 
-To be unambiguous: **this repository is an MCP workspace.** It configures the [Dynatrace MCP server](https://github.com/dynatrace-oss/dynatrace-mcp) so an AI assistant (Copilot, Claude) can talk to your Dynatrace tenant in-process, and it ships skills, prompts, and conventions on top of that.
+To be unambiguous: **this repository is an MCP workspace.** It configures the Dynatrace MCP server so an AI assistant (Copilot, Claude) can talk to your Dynatrace tenant, and it ships skills, prompts, and conventions on top of that.
 
-**`dtctl` is a completely different project, in a completely different repository, owned and released independently:** [github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl). It's a kubectl-style CLI for Dynatrace. Nothing in this repo builds, ships, or vendors it.
+**`dtctl` is a completely different project, in a completely different repository:** [github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl). It's a kubectl-style CLI for Dynatrace. This repo does not build, ship, or vendor it.
 
-That said, **this workspace is configured assuming you have `dtctl` installed alongside MCP**, and the agent prompts/skills are written to use the best of both:
+You can run this workspace **MCP-only** (skip Step 3) and still get a lot of value. Installing `dtctl` is recommended for the full experience.
 
-- **MCP** is preferred for things it does best (Davis CoPilot chat, Davis Analyzers, ad-hoc Slack/email, `send_event`, NL→DQL helpers, structured-JSON-direct-to-the-AI).
-- **`dtctl`** is preferred for things *it* does best (declarative `apply`/`diff`/`history`/`restore`, `share`/`unshare`, persistent multi-context with safety levels, custom output formats, anything you want to *see* in the terminal).
-- For the large overlap (DQL queries, reading entities, creating/editing notebooks/dashboards/workflows/settings), either one works — the AI follows a small selection rubric documented in [CONVENTIONS.md](CONVENTIONS.md#tool-selection-mcp-vs-dtctl) and continuity rules.
-
-You can run this workspace **MCP-only** if you skip Step 3 — most things still work, but you'll lose the `dtctl`-only column from the [capability table](#two-paths-to-dynatrace) below. The full experience expects both.
+If you only read one explainer on how MCP and `dtctl` fit together, jump to: [MCP vs `dtctl` (Read this once)](#mcp-vs-dtctl-read-this-once).
 
 ---
 
@@ -62,6 +82,10 @@ dt-mcp-server/
 └── temp_dtctl_files/             # Local-only tenant experiments + nickname registry (gitignored, never pushed)
 ```
 
+---
+
+## Prerequisites
+
 | What | Why | Get It |
 |---|---|---|
 | [VS Code](https://code.visualstudio.com/) | Where you will work with the AI | Download from code.visualstudio.com |
@@ -69,6 +93,20 @@ dt-mcp-server/
 | [Node.js](https://nodejs.org/) v18+ | Powers the skill installer and MCP server | Download LTS version |
 | [dtctl](https://github.com/dynatrace-oss/dtctl) | Optional companion CLI — recommended for the full experience (see *Two paths to Dynatrace* table below) | See Step 3 below |
 | A Dynatrace environment | Live data source | Any `*.apps.dynatrace.com` tenant you have access to |
+
+### Highly recommended VS Code extensions (GitHub Copilot users)
+
+If you're using GitHub Copilot in VS Code, install these extensions before setup:
+
+| Extension | Why |
+|---|---|
+| **GitHub Copilot Chat** | Main AI assistant for the workspace |
+| **Dynatrace Apps** | Strato app development and dashboard component support |
+| **Dynatrace Debugging Extension** | Debugging and testing in Dynatrace |
+| **PowerShell** | Enables validation scripts (validate-tenant-write.ps1, refresh-context.ps1) |
+| **GitLens** | Git history, blame, branch management — helpful for collaboration |
+
+> **Claude Code users:** No extension installation needed — Claude Code runs in the web browser or desktop app.
 
 ---
 
@@ -90,20 +128,6 @@ Select your setup path below. Both receive the same skills, prompts, and MCP ser
 **GitHub Copilot Path** → Follow Steps 1–6 below. Copilot loads `.github/copilot-instructions.md` automatically.
 
 **Claude Code Path** → Follow Steps 1–5, then open `CLAUDE.md` in your Claude Code session. Claude loads `.claude/skills/` symlinks automatically.
-
-### Recommended VS Code Extensions (GitHub Copilot users)
-
-This workspace assumes **VS Code + GitHub Copilot**. Install these extensions from the VS Code marketplace before setup:
-
-| Extension | Why |
-|---|---|
-| **GitHub Copilot Chat** | Main AI assistant for the workspace |
-| **Dynatrace Apps** | Strato app development and dashboard component support |
-| **Dynatrace Debugging Extension** | Debugging and testing in Dynatrace |
-| **PowerShell** | Enables validation scripts (validate-tenant-write.ps1, refresh-context.ps1) |
-| **GitLens** | Git history, blame, branch management — helpful for collaboration |
-
-> **Claude Code users:** No extension installation needed — Claude Code runs in the web browser or desktop app.
 
 ### 1. Clone this workspace
 
@@ -416,6 +440,16 @@ The prompts follow a structured drill-down pattern:
 
 ## Key Concepts
 
+### MCP vs `dtctl` (Read this once)
+
+This workspace is designed to use **two independent paths** to Dynatrace, and the AI will choose between them depending on the task:
+
+- **MCP** is preferred for things it does best (Davis CoPilot chat, Davis Analyzers, ad-hoc Slack/email, `send_event`, NL→DQL helpers, structured-JSON-direct-to-the-AI).
+- **`dtctl`** is preferred for things *it* does best (declarative `apply`/`diff`/`history`/`restore`, `share`/`unshare`, persistent multi-context with safety levels, custom output formats, anything you want to *see* in the terminal).
+- For the large overlap (DQL queries, reading entities, creating/editing notebooks/dashboards/workflows/settings), either one works — the AI follows a small selection rubric documented in [CONVENTIONS.md](CONVENTIONS.md#tool-selection-mcp-vs-dtctl) and continuity rules.
+
+You can run this workspace **MCP-only** if you skip Step 3 — most things still work, but you'll lose the `dtctl`-only column from the [capability table](#two-paths-to-dynatrace) in Setup. The full experience expects both.
+
 ### Why Skills Matter
 
 Copilot without skills will guess DQL syntax — and get it wrong. For example, it might use `event.status == "OPEN"` (doesn't exist) instead of `event.status == "ACTIVE"`, or `log.level` instead of `loglevel`. The skills encode the corrections for known failure modes before Copilot writes a single query.
@@ -431,7 +465,7 @@ MCP is one of two independent paths the AI uses to reach Dynatrace. The
 other path is **`dtctl`**, a sibling CLI maintained in its own repo:
 [github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl).
 Both paths are first-class and largely overlap in capability today — see
-[Two paths to Dynatrace](#two-paths-to-dynatrace-read-this-once) above
+[Two paths to Dynatrace](#two-paths-to-dynatrace) above
 for a side-by-side capability comparison so you can decide which to
 configure (or configure both).
 
@@ -521,8 +555,7 @@ same:
 **Update workflow:**
 
 1. Edit `.vscode/mcp.json` — add or modify a server entry.
-2. Run `jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json` to mirror
-   the change to the root file.
+2. Mirror the change to the root file (use the `jq` command shown above).
 3. Reload VS Code (`Ctrl+Shift+P` → *Developer: Reload Window*) so the new
    MCP server subprocess is spawned with the new config.
 4. Verify in Copilot Chat: *"Use the `<server-nickname>` server, list the
@@ -541,23 +574,17 @@ mechanism today.
 - **`TENANTID`** is a placeholder — replace it locally with your own
   tenant ID, but don't commit your private ID into a public repo.
 
-When adding or updating MCP servers, always update both files. Regenerate `.mcp.json` from `.vscode/mcp.json` using:
-
-```bash
-jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json
-```
-
 ---
 
 ## dtctl CLI (separate repo)
 
-[dtctl](https://github.com/dynatrace-oss/dtctl) is a sibling kubectl-style CLI for Dynatrace, maintained in its own repository. It complements this MCP workspace by giving you (and the AI) terminal-level access to run DQL queries, manage workflows, and verify notebooks.
+[dtctl](https://github.com/dynatrace-oss/dtctl) is a sibling kubectl-style CLI for Dynatrace, maintained in its own repository.
 
-This README intentionally **does not** duplicate `dtctl` install, auth, or usage docs — those live in the dtctl repo and evolve independently. Refer to:
+If you installed `dtctl` in [Step 3](#3-install-dtctl-separate-repo), you're done. If you skipped it and later decide you want the full experience (visible terminal commands, declarative apply/diff/history, multi-context safety levels), install it from:
 
 **→ [github.com/dynatrace-oss/dtctl](https://github.com/dynatrace-oss/dtctl)**
 
-for installation, OAuth and token-based auth, safety levels, context management, and command reference.
+This README intentionally **does not** duplicate `dtctl` install/auth docs — they evolve independently in the `dtctl` repo.
 
 > **Side note:** I also maintain a personal fork at
 > [github.com/israel-salgado/dtctl](https://github.com/israel-salgado/dtctl)
@@ -567,19 +594,9 @@ for installation, OAuth and token-based auth, safety levels, context management,
 
 ## Keeping Up to Date
 
-```bash
-# Update all skills to latest
-npx skills add dynatrace/dynatrace-for-ai
-npx skills add dynatrace-oss/dtctl
-
-# Regenerate .mcp.json after any MCP server changes
-jq "{mcpServers: .servers}" .vscode/mcp.json > .mcp.json
-
-# Commit the updates
-git add .
-git commit -m "Update skills to latest"
-git push
-```
+- **Update skills:** re-run [Step 2](#2-update-skills-to-latest).
+- **After changing MCP servers:** mirror `.vscode/mcp.json` into `.mcp.json` (see [MCP Configuration Files](#mcp-configuration-files)), then reload VS Code.
+- **If you're maintaining your own fork:** commit and push only the workspace changes you intend to share (your local tenant data stays under `temp_dtctl_files/` and should remain untracked).
 
 ---
 
