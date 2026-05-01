@@ -61,15 +61,16 @@ When in doubt:
 
 ## Tenant Isolation (Absolute)
 - **Cross-tenant data movement is forbidden.** Each Dynatrace tenant is a sealed island. Never read data, IDs, names, queries, entity references, dashboards, notebooks, settings, or any artifact from one tenant and embed, transform, copy, apply, or even *reference* it in another tenant's context.
-- **Mandatory dual-context echo before any tenant write.** Before any `dtctl apply`, MCP `update_*`/`create_*`/`send_*`, or write to a Dynatrace resource, the agent must emit one block on its own line:
+- **Mandatory dual-context echo before any tenant write.** Before any `dtctl apply`, MCP `update_*`/`create_*`/`send_*`, or write to a Dynatrace resource, the agent must emit one block on its own line (IDs only, no nicknames per the *Nickname display rule* in `.github/copilot-instructions.md` / `CLAUDE.md`):
   ```
-  Target tenant write → dtctl: <NICKNAME> · <TENANTID> · <class> · <safety>
-                         MCP : <SERVER-NICKNAME> · <TENANTID>   (or "none selected this turn")
+  Target tenant write → dtctl: <TENANTID> · <class> · <safety>
+                         MCP : <TENANTID>   (or "none selected this turn")
                          File: temp_dtctl_files/tenant-memory/<TENANTID>/<path>
                          Status: OK ✓   (or STOP ✗ on any disagreement)
   ```
   If the dtctl context, the selected MCP server (when used), and the file's parent folder do not all point to the same `<TENANTID>`, **stop and ask** before writing.
 - **Session reset on tenant switch.** When the user switches dtctl context or selects a different MCP server in chat, the agent declares: *"Tenant changed → discarding in-memory references to entities, IDs, queries, and findings from the previous tenant."* No tenant-specific facts, names, IDs, or analyses carry forward into the new tenant context.
+- **Don't name other tenants in findings.** In any answer about the active tenant, the agent does not mention other tenant nicknames or IDs. Comparative shorthand ("same as `<other>`", "like we saw on `<other>`") is forbidden — describe each finding on its own terms. Other-tenant *IDs* are only allowed when they are the literal subject of the operation (registry/config edits, the dual-context echo block, or a comparison the user explicitly asked for); other-tenant *nicknames* are governed by the stricter **Nickname display rule** (see `.github/copilot-instructions.md` / `CLAUDE.md` → *Always-On Behaviors*) and are effectively never printed outside a user-initiated switch or a "which tenant am I on?" answer. When in doubt, omit the other name.
 - **Memory scoping.**
   - `/memories/` (user) — workspace-agnostic preferences only. No tenant data.
   - `/memories/repo/` — generic workspace patterns and lessons that hold true for **all** tenants. No tenant names, no tenant IDs, no tenant-specific entity references, no tenant-specific findings.
@@ -350,9 +351,9 @@ If the grep does not find these phrases in at least the three high-impact skills
 - Use `temp_dtctl_files/` for experiments only.
 - Update this file when new patterns or lessons emerge.
 - The memory system (`/memories/repo/`) holds AI-side notes; committed rules live here.
-- **Clickable options for ALL choices presented to the user (mandatory).** Whenever the agent ends a turn by offering the user a choice between two or more options — *including* inline phrasings like "want me to do A or B?", "should I X, Y, or skip?", "do you want me to also …?", or any other yes/no/either-or prompt — the agent **must** call `vscode_askQuestions` with labelled options instead of asking in plain prose. Rules:
+- **Clickable options for ALL choices presented to the user (mandatory).** Whenever the agent ends a turn by offering the user a choice — **including yes/no, this/that, and any two-option prompt** (e.g. "run it?", "keep going?", "want me to do A or B?", "should I X, Y, or skip?", "do you want me to also …?") — the agent **must** call `vscode_askQuestions` with labelled options instead of asking in plain prose. A mouse click is always faster than typing "yes". Rules:
    - Always include freeform input (`allowFreeformInput: true`, the default) so the user can type something other than the offered options. The freeform field is the implicit "other / something else" option — do not also list a separate "Other" button.
-   - 2–6 labelled options is the target range; if more would be needed, narrow the question or split it.
+   - **Cap labelled options at 6 maximum** (the freeform field counts toward that ceiling for visual budget). 2 is the floor — even a yes/no needs buttons. If you'd need more than 6, narrow the question or split it.
    - Mark the recommended option with `recommended: true` only when there is a clear default, not by reflex.
    - Multi-select only when the user can genuinely pick more than one (`multiSelect: true`).
    - **Plain-text prompts are reserved for open-ended questions** (e.g. "what URL?", "what nickname?", "paste the JSON") where there is no fixed option set. Explanations, summaries, recommendations, and multi-paragraph reasoning stay in plain text — those are not choices.
