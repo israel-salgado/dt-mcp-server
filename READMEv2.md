@@ -308,13 +308,15 @@ Field values:
 >
 > If it's ignored, the command prints the matching `.gitignore` rule. If it prints nothing (and exits non-zero), the folder is *not* protected — add `temp_dtctl_files/` to your `.gitignore` before committing anything.
 
-**Step 4.D — Update the briefing tables (optional, cosmetic)**
+**Step 4.D — Keep tenant details local (recommended)**
 
-If you want the AI's session-start summary to mention your tenant by name (rather than only `demo.live`), ask the AI to add a one-line row to the Environment table in `.github/copilot-instructions.md` and `CLAUDE.md`:
+Do **not** add private tenant IDs/URLs to repo-tracked briefing files like `.github/copilot-instructions.md` or `CLAUDE.md`. Those files should stay tenant-agnostic (the only committed tenant is the public `demo.live`).
 
-> *"Add a row for my tenant `<your-nickname>` to the Environment table in `.github/copilot-instructions.md` and `CLAUDE.md`."*
+Instead, keep tenant metadata local in `temp_dtctl_files/tenant-memory/tenants.json` (git-ignored), and keep any private MCP routing changes local in your working copy of `.vscode/mcp.json` / `.mcp.json`.
 
-Skip this if you don't care about the session-start banner — everything else works without it.
+If you did Steps 4.A–4.C, the AI can already mention your tenant by nickname via:
+- the MCP server name you configured ("Using the `<nickname>` server, …"), and
+- the dtctl nickname registry ("switch to `<nickname>`").
 
 > **Note on `dtctl` authentication:** You already configured `dtctl` in [Step 3](#3-install-dtctl-separate-repo). MCP and `dtctl` are independent authentication paths — nothing more to do here.
 
