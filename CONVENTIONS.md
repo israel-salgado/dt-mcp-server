@@ -226,13 +226,23 @@ A bare `"switch to <nickname>"` (or `"switch to <tenantid>"`) from the user mean
 
 | User says | dtctl action | MCP action |
 |---|---|---|
-| `switch to <nickname>` | resolve nickname, then `dtctl config use-context <id>`, echo `Switching context → …` | announce `Using MCP server → <nickname> · <id>` and prefer `mcp_<server>_*` tools for subsequent calls |
+| `switch to <nickname>` | resolve nickname, then `dtctl config use-context <id>`, echo `Switching context → …` | **stop every running MCP server**, then start the matching one (if any) |
 | `switch dtctl to <nickname>` | as above | unchanged |
 | `use the <nickname> server` (or similar MCP-only phrasing) | unchanged | as above |
 
+**Single-MCP-server rule (mandatory).** Mirroring dtctl's single-context-on-disk model, only one MCP server may be running at any moment. On every `"switch to <NICKNAME>"` the agent:
+
+1. Stops every currently-running MCP server using `run_vscode_command` → `workbench.mcp.stopServer` with args `["<server-name>"]`. **Verified working from the agent surface.**
+2. If the target nickname has a matching MCP server entry in `.vscode/mcp.json` / `.mcp.json`, starts it with `run_vscode_command` → `workbench.mcp.startServer` with args `["<server-name>"]`. Tool visibility may lag a turn after start — the user can verify via *MCP: List Servers*.
+3. If the target nickname has **no** MCP server entry (dtctl-only tenant), leaves **no** MCP server running. The agent operates dtctl-only for that tenant.
+4. If the target nickname has only an MCP server entry (no dtctl context), starts that one server and operates MCP-only.
+5. The user may opt out for a single turn with `"keep all MCP servers running"` — the agent honors it but re-applies the rule on the next switch.
+
+Why this rule exists: every running MCP server is a live, callable connection to its tenant. Stopping non-active servers turns the prefix-routing safety check (`mcp_<server>_*`) into a hard guarantee — the agent cannot accidentally call into a tenant whose server is not running.
+
 Limitations the agent must be honest about:
-- The agent **cannot** programmatically change which MCP server VS Code's chat client highlights in its picker. That selection lives in the client. The agent achieves the same effect by routing all subsequent MCP calls through the named server's `mcp_<server>_*` tools and announcing the choice.
-- If one path is not configured (e.g. no matching MCP server entry, or no dtctl context), the agent reports which path failed and continues with the one that succeeded.
+- The agent **cannot** programmatically change which MCP server VS Code's chat client highlights in its picker. That selection lives in the client. The agent achieves the same effect by stopping all other servers and routing all subsequent MCP calls through the named server's `mcp_<server>_*` tools.
+- The `run_vscode_command` tool is described as "new workspace creation only" but the `workbench.mcp.stopServer` / `workbench.mcp.startServer` invocations work in practice. The agent uses them only for explicit MCP lifecycle actions (switch, stop, start) — not as side effects of unrelated work.
 - Ambiguous or fuzzy nicknames are never auto-resolved — always ask.
 
 ### Session start
